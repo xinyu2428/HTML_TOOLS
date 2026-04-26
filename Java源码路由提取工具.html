@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Java源码路由提取</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+    <style>
+        .input-focus { outline: none; border-color: #3b82f6; ring: 2px; ring-color: #bfdbfe; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        table { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; }
+        th { background: #f8fafc; border-bottom: 2px solid #e2e8f0; z-index: 20; position: sticky; top: 0; font-size: 11px; color: #64748b; text-align: left; padding: 12px 16px; transition: all 0.2s; }
+        td { border-bottom: 1px solid #f1f5f9; vertical-align: top; font-size: 11px; word-break: break-all; padding: 10px 16px; }
+        .param-tag { font-family: 'Fira Code', monospace; font-size: 10px; padding: 1px 4px; border-radius: 4px; margin-right: 4px; margin-bottom: 4px; display: inline-block; }
+        .drop-zone { border: 2px dashed #e2e8f0; transition: all 0.3s; }
+        .drop-zone.dragover { border-color: #3b82f6; background: #eff6ff; }
+        .view-tag { position: absolute; right: 20px; top: 12px; font-size: 9px; font-weight: 800; padding: 2px 8px; border-radius: 99px; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 font-sans">
+    <div class="max-w-[1700px] mx-auto p-6">
+        <header class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-black text-slate-900 tracking-tight">Java源码路由提取</h1>
+                <p class="text-slate-400 text-sm mt-1">Java源码路由提取、Swagger的json文本接口提取，支持导出xlsx文件</p>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- 功能模块 A: 源码 -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 relative flex flex-col">
+                <h2 class="text-sm font-bold flex items-center text-slate-700 mb-4">源码项目扫描</h2>
+                <div class="flex gap-2 mb-3">
+                    <input id="pathSource" type="text" readonly class="flex-1 bg-slate-50 border border-slate-200 rounded-xl py-2 px-4 text-[10px]" placeholder="尚未选择目录...">
+                    <button id="btnPickerDir" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-xl text-[10px] font-bold shadow-sm transition-all whitespace-nowrap">选择目录</button>
+                </div>
+                <div id="fileCountStatus" class="text-[10px] text-slate-400 mt-auto font-medium">等待添加代码目录中...</div>
+                <div id="apiScanStatus" class="text-[10px] text-slate-400 mb-3 font-medium min-h-[15px]"></div>
+                <button id="btnRunCode" class="w-full bg-slate-900 hover:bg-black text-white font-bold py-2.5 rounded-xl text-xs transition-all">解析代码路由</button>
+            </div>
+
+            <!-- 功能模块 B: Swagger -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 relative flex flex-col">
+                <h2 class="text-sm font-bold flex items-center text-slate-700 mb-4">Swagger/OpenAPI 解析</h2>
+                <div class="flex gap-2 mb-3">
+                    <textarea id="jsonInput" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl py-2 px-4 text-[10px] h-[36px] min-h-[36px] resize-none overflow-hidden font-mono input-focus" placeholder="粘贴 JSON 内容..."></textarea>
+                    <input type="file" id="fileInput" hidden accept=".json,.txt">
+                    <button onclick="document.getElementById('fileInput').click()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-xl text-[10px] font-bold shadow-sm transition-all whitespace-nowrap">加载文件</button>
+                </div>
+                <div id="swaggerLoadStatus" class="text-[10px] text-slate-400 mt-auto font-medium">等待加载 Swagger 文本...</div>
+                <div id="swaggerParseStatus" class="text-[10px] text-slate-400 mb-3 font-medium min-h-[15px]"></div>
+                <button id="btnRunSwagger" class="w-full bg-slate-900 hover:bg-black text-white font-bold py-2.5 rounded-xl text-xs transition-all">解析 Swagger 接口</button>
+            </div>
+        </div>
+
+        <!-- 控制与状态 -->
+        <div class="flex items-center gap-4 mb-6 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="flex-1 relative">
+                <input type="text" id="searchInput" class="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-4 pl-10 text-xs input-focus" placeholder="在当前结果中搜索...">
+                <span class="absolute left-3 top-2.5 opacity-30">🔍</span>
+            </div>
+            <div id="viewIndicator" class="text-[10px] font-black uppercase tracking-widest text-slate-300">当前视图: 待定</div>
+            <button id="btnExport" disabled class="px-10 bg-slate-200 text-slate-400 font-bold py-2 rounded-xl cursor-not-allowed transition-all text-xs">导出当前结果</button>
+            <button id="btnClear" class="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-400 rounded-xl text-xs font-bold">重置</button>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="overflow-x-auto max-h-[600px]">
+                <table id="resTable">
+                    <thead id="resHead"></thead>
+                    <tbody id="resBody" class="font-medium text-slate-600">
+                        <tr><td colspan="10" class="p-20 text-center text-slate-300 italic text-sm">请从上方选择一个功能模块开始工作...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. 视图配置定义
+        const VIEW_CONFIGS = {
+            CODE: {
+                headers: ["类名", "方法名", "类型", "完整路由", "参数详情", "文件相对路径"],
+                widths: ["18%", "12%", "6%", "20%", "22%", "22%"],
+                fields: ["group", "title", "type", "route", "detail", "location"]
+            },
+            SWAGGER: {
+                headers: ["路由", "类型", "Tags", "Summary", "OperationId", "Consumes", "Produces", "Parameters / Body"],
+                widths: ["20%", "6%", "10%", "15%", "10%", "10%", "10%", "19%"],
+                fields: ["route", "type", "group", "title", "location", "consumes", "produces", "detail"]
+            }
+        };
+
+        let currentView = null; // 'CODE' or 'SWAGGER'
+        let auditData = [];
+        let allJavaFiles = [];
+        let definitions = {};
+
+        // 2. 动态更新表头
+        function updateTableHeader(viewType) {
+            if (currentView === viewType) return;
+            currentView = viewType;
+            
+            const head = document.getElementById('resHead');
+            const config = VIEW_CONFIGS[viewType];
+            
+            let html = '<tr>';
+            config.headers.forEach((h, i) => {
+                html += `<th style="width: ${config.widths[i]}">${h}</th>`;
+            });
+            html += '</tr>';
+            head.innerHTML = html;
+
+            const indicator = document.getElementById('viewIndicator');
+            indicator.innerText = `当前视图: ${viewType}`;
+            indicator.className = `text-[10px] font-black uppercase tracking-widest ${viewType === 'CODE' ? 'text-blue-500' : 'text-emerald-500'}`;
+        }
+
+        // --- 功能模块 A: 源码扫描逻辑 ---
+        async function scanEntry(entry, path = "") {
+            if (entry.kind === 'directory') {
+                for await (const child of entry.values()) await scanEntry(child, path + entry.name + "/");
+            } else if (entry.name.endsWith('.java')) {
+                allJavaFiles.push({ handle: entry, name: entry.name, relPath: path + entry.name });
+            }
+        }
+
+        document.getElementById('btnPickerDir').onclick = async () => {
+            const h = await window.showDirectoryPicker();
+            allJavaFiles = [];
+            document.getElementById('pathSource').value = h.name;
+            const statusEl = document.getElementById('fileCountStatus');
+            const apiStatusEl = document.getElementById('apiScanStatus');
+            apiStatusEl.innerText = ""; 
+            statusEl.innerText = "正在扫描目录...";
+            statusEl.className = "text-[10px] text-blue-500 mt-auto font-bold animate-pulse";
+            await scanEntry(h);
+            statusEl.innerText = `加载完成: ${allJavaFiles.length} 文件`;
+            statusEl.className = "text-[10px] text-emerald-600 mt-auto font-bold";
+        };
+
+        const RE_CLASS_MAP = /@(?:Request|Path)Mapping\s*\(\s*(?:(?:value|path)\s*=\s*)?\{?\s*"([^"]+)"/i;
+        function smartExtract(code, startPos) {
+            const lookAhead = code.substring(startPos, startPos + 1000);
+            const cleanText = lookAhead.replace(/@\w+\s*\([^)]*\)/gs, '').replace(/@\w+/gs, '');
+            const methodRegex = /(?:(?:public|protected|private|static|final)\s+)*[\w\<\>,\.\s\[\]]+\s+(\w+)\s*\(/;
+            const funcMatch = cleanText.match(methodRegex);
+            const mName = funcMatch ? funcMatch[1] : "unknown";
+            let params = "n/a";
+            const callIdx = lookAhead.indexOf(`${mName}(`);
+            if (callIdx !== -1) {
+                let openIdx = lookAhead.indexOf('(', callIdx);
+                let balance = 0, started = false, raw = "";
+                for (let i = openIdx; i < lookAhead.length; i++) {
+                    if (lookAhead[i] === '(') { balance++; started = true; }
+                    if (lookAhead[i] === ')') balance--;
+                    if (started) raw += lookAhead[i];
+                    if (started && balance === 0) break;
+                }
+                params = raw.substring(1, raw.length - 1).replace(/\s+/g, ' ').trim();
+            }
+            return { mName, params };
+        }
+
+        document.getElementById('btnRunCode').onclick = async () => {
+            if (allJavaFiles.length === 0) return alert("请先选择源码项目路径");
+            
+            updateTableHeader('CODE');
+            auditData = [];
+            
+            const apiStatusEl = document.getElementById('apiScanStatus');
+            apiStatusEl.innerText = "源码静态分析中...";
+            apiStatusEl.className = "text-[10px] text-blue-500 mb-3 font-bold animate-pulse";
+            
+            const rootPath = document.getElementById('pathSource').value;
+            const duplicateCheck = new Set();
+            
+            for (const fileObj of allJavaFiles) {
+                const code = await (await fileObj.handle.getFile()).text();
+                if (!(code.includes("@Controller") || code.includes("@RestController"))) continue;
+                
+                const pkgMatch = fileObj.relPath.match(/(?:cn|com|net|org|io|edu|co)\/.*\.java$/i);
+                const classId = pkgMatch ? pkgMatch[0].replace(/\.java$/i, '').replaceAll('/', '.') : fileObj.name.replace(/\.java$/i, '');
+                const classPrefix = (code.match(RE_CLASS_MAP) || ["", ""])[1];
+                const classBodyStart = code.search(/public\s+(?:class|interface|@interface|enum)/);
+                const methodCode = code.substring(classBodyStart);
+
+                let mMatch;
+                const RE_SCAN = /@(Post|Get|Request|Put|Delete|Patch|Path)Mapping\s*\(\s*(?:(?:value|path)\s*=\s*)?\{?\s*"([^"]+)"/gi;
+                while ((mMatch = RE_SCAN.exec(methodCode)) !== null) {
+                    const route = (classPrefix.replace(/\/$/, '') + '/' + mMatch[2].replace(/^\//, '')).replaceAll('//', '/');
+                    if (route === "N/A" || route === "/" || !route) continue;
+                    
+                    const extraction = smartExtract(methodCode, mMatch.index + mMatch[0].length);
+                    const type = mMatch[1].toUpperCase().replace('REQUEST', 'REQ');
+                    
+                    const fingerPrint = `${classId}|${type}|${route}|${extraction.mName}`;
+                    if(duplicateCheck.has(fingerPrint)) continue;
+                    duplicateCheck.add(fingerPrint);
+
+                    auditData.push({
+                        group: classId,
+                        title: extraction.mName,
+                        type: type,
+                        route: route,
+                        detail: extraction.params,
+                        location: fileObj.relPath
+                    });
+                }
+            }
+            renderTable();
+            
+            apiStatusEl.innerText = `源码解析完成: ${auditData.length} API`;
+            apiStatusEl.className = "text-[10px] text-blue-600 mb-3 font-bold";
+            
+            toggleExportBtn();
+        };
+
+        // --- 功能模块 B: Swagger 解析逻辑 ---
+        function resolveRef(ref) {
+            if (!ref || typeof ref !== 'string') return ref;
+            const path = ref.replace('#/', '').split('/');
+            let current = definitions;
+            for (const segment of path) {
+                if (segment === 'definitions' || segment === 'components' || segment === 'schemas') continue;
+                current = current ? current[segment] : null;
+            }
+            return current ? JSON.stringify(current) : ref;
+        }
+
+        document.getElementById('btnRunSwagger').onclick = async () => {
+            let input = document.getElementById('jsonInput').value.trim();
+            if (!input) return alert("请输入 JSON 内容");
+            
+            const parseStatusEl = document.getElementById('swaggerParseStatus');
+            parseStatusEl.innerText = "Swagger 解析中...";
+            parseStatusEl.className = "text-[10px] text-emerald-500 mb-3 font-bold animate-pulse";
+
+            // 自动忽略前面的脏数据（如 HTTP 响应头）
+            const startIdx = input.indexOf('{');
+            if (startIdx !== -1) {
+                input = input.substring(startIdx);
+            }
+            
+            updateTableHeader('SWAGGER'); 
+            auditData = [];
+            
+            try {
+                const spec = JSON.parse(input);
+                definitions = spec.definitions || (spec.components ? spec.components.schemas : {});
+                const basePath = (spec.basePath || '').replace(/\/$/, '');
+                const paths = spec.paths || {};
+
+                for (const [path, methods] of Object.entries(paths)) {
+                    for (const [method, info] of Object.entries(methods)) {
+                        let parameters = Array.isArray(info.parameters) ? [...info.parameters] : [];
+                        const consumesArr = info.consumes || (info.requestBody ? Object.keys(info.requestBody.content) : []);
+                        const producesArr = info.produces || [];
+
+                        const processedParams = parameters.map(p => {
+                            let pClone = JSON.parse(JSON.stringify(p));
+                            if (pClone.schema && pClone.schema.$ref) {
+                                try { pClone.schema = JSON.parse(resolveRef(pClone.schema.$ref)); } catch(e) {}
+                            }
+                            return pClone.name + (pClone.in ? `(${pClone.in})` : '');
+                        }).join(', ');
+
+                        auditData.push({
+                            route: basePath + path,
+                            type: method.toUpperCase(),
+                            group: (info.tags || []).join(', ') || 'Default',
+                            title: info.summary || '-',
+                            location: info.operationId || 'N/A',
+                            consumes: consumesArr.join(', '),
+                            produces: producesArr.join(', '),
+                            detail: processedParams || 'None'
+                        });
+                    }
+                }
+                renderTable();
+                parseStatusEl.innerText = `Swagger 解析完成: ${auditData.length} API`;
+                parseStatusEl.className = "text-[10px] text-emerald-600 mb-3 font-bold";
+                toggleExportBtn();
+            } catch (e) {
+                alert("JSON 解析失败: " + e.message);
+                parseStatusEl.innerText = "解析失败，请检查格式";
+                parseStatusEl.className = "text-[10px] text-red-500 mb-3 font-bold";
+            }
+        };
+
+        // --- 通用渲染与交互 ---
+        function renderTable() {
+            const body = document.getElementById('resBody');
+            const term = document.getElementById('searchInput').value.toLowerCase();
+            body.innerHTML = "";
+            
+            if (!currentView) return;
+            const config = VIEW_CONFIGS[currentView];
+            const filtered = auditData.filter(d => 
+                Object.values(d).some(v => String(v).toLowerCase().includes(term))
+            );
+
+            if(filtered.length === 0) {
+                body.innerHTML = `<tr><td colspan="10" class="p-20 text-center text-slate-300 italic">没有匹配结果</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(d => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition-all border-b border-slate-100";
+                
+                let html = '';
+                config.fields.forEach(f => {
+                    let val = d[f] || '-';
+                    if (f === 'type') {
+                        const c = val === 'POST' ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-400';
+                        html += `<td class="p-4 text-center"><span class="px-2 py-1 rounded text-[9px] font-black ${c}">${val}</span></td>`;
+                    } else if (f === 'route') {
+                        html += `<td class="p-4 text-xs font-semibold"><code>${val}</code></td>`;
+                    } else {
+                        html += `<td class="p-4">${val}</td>`;
+                    }
+                });
+                tr.innerHTML = html;
+                body.appendChild(tr);
+            });
+        }
+
+        document.getElementById('searchInput').oninput = renderTable;
+        document.getElementById('btnClear').onclick = () => location.reload();
+
+        function toggleExportBtn() {
+            const btn = document.getElementById('btnExport');
+            btn.disabled = auditData.length === 0;
+            btn.className = auditData.length === 0 
+                ? "px-10 bg-slate-200 text-slate-400 font-bold py-2 rounded-xl cursor-not-allowed text-xs"
+                : "px-10 bg-emerald-600 text-white font-bold py-2 rounded-xl shadow-lg text-xs";
+        }
+
+        // --- 导出逻辑 (自适应列) ---
+        document.getElementById('btnExport').onclick = async () => {
+            const config = VIEW_CONFIGS[currentView];
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('API_Report');
+            
+            // 冻结首行
+            worksheet.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
+
+            const headerRow = worksheet.addRow(config.headers);
+            headerRow.eachCell(cell => {
+                cell.font = { name: '微软雅黑', bold: true, size: 10 };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+            });
+
+            auditData.forEach(d => {
+                const rowData = config.fields.map(f => d[f]);
+                worksheet.addRow(rowData);
+            });
+
+            worksheet.columns.forEach((col, i) => {
+                col.width = 30;
+            });
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+            a.download = `${currentView}_Audit_${new Date().getTime()}.xlsx`;
+            a.click();
+        };
+
+        function loadFile(file) {
+            const r = new FileReader();
+            r.onload = (e) => {
+                document.getElementById('jsonInput').value = e.target.result;
+                const loadStatusEl = document.getElementById('swaggerLoadStatus');
+                loadStatusEl.innerText = `已加载文件: ${file.name}`;
+                loadStatusEl.className = "text-[10px] text-emerald-600 mt-auto font-bold";
+                document.getElementById('swaggerParseStatus').innerText = "";
+            };
+            r.readAsText(file);
+        }
+        document.getElementById('fileInput').onchange = (e) => {
+            if (e.target.files.length > 0) loadFile(e.target.files[0]);
+        };
+    </script>
+</body>
+</html>
