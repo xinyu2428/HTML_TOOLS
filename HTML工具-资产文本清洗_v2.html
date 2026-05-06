@@ -70,17 +70,18 @@
 </style>
 
 <body>
-    <textarea id="history" cols="30" rows="40" placeholder="需要两个输入框时使用" style="width: 15%;"></textarea>
-    <textarea id="new" cols="80" rows="40" placeholder="基本输入位置" style="width: 40%;"></textarea>
-    <div class="btn-group">
-        <button id="quchong" onclick="dataCleaning()" title="示例: 放入文本,IP,子域名...">去重排序求差集</button>
-        <button id="quchong" onclick="mergeSubdomainAndPort()">组合域名与端口</button>
-        <button id="quchong" onclick="getNmapResult()" title="Nmap扫描记录信息提取,将IP与端口合并成URL">Nmap端口提取</button>
-        <button onclick="getIP()" title="提取文本中所有的IP">IP提取</button>
-        <button onclick="getURL()">子域名提取</button>
-        <button onclick="getIP2()" title="示例(支持B段C段): 192.168.7.*;192.168.*.1;192.168.*.*">IP生成</button>
-    </div>
-    <textarea id="result" cols="60" rows="40" placeholder="显示结果位置" style="width: 25%;"></textarea>
+<textarea id="history" cols="30" rows="40" placeholder="需要两个输入框时使用" style="width: 15%;"></textarea>
+<textarea id="new" cols="80" rows="40" placeholder="基本输入位置" style="width: 40%;"></textarea>
+<div class="btn-group">
+    <button id="quchong" onclick="dataCleaning()" title="示例: 放入文本,IP,子域名...">去重排序求差集</button>
+    <button id="quchong" onclick="mergeSubdomainAndPort()">组合域名与端口</button>
+    <button id="quchong" onclick="getNmapResult()" title="Nmap扫描记录信息提取,将IP与端口合并成URL">Nmap端口提取</button>
+    <button onclick="getIP()" title="提取文本中所有的IP">IP提取</button>
+    <button onclick="getURL()">子域名提取</button>
+    <button onclick="getURL2()">根域名提取</button>
+    <button onclick="getIP2()" title="示例(支持B段C段): 192.168.7.*;192.168.*.1;192.168.*.*">IP段生成</button>
+</div>
+<textarea id="result" cols="60" rows="40" placeholder="显示结果位置" style="width: 25%;"></textarea>
 </body>
 
 <script type="text/javascript">
@@ -127,7 +128,6 @@
             }
         }
         dom_textarea_result.value = "---<" + list_result.length + ">---\n" + list_result.join("\n")
-
 
 
     }
@@ -179,6 +179,49 @@
         dom_textarea_result.value = "---提取URL数量<" + list_result.length + ">---\n" + list_result.join("\n")
     }
 
+    function getURL2() {
+        // alert("添加根域名提取")
+        var list_result = []
+        var reg = /([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}/g
+        //var ref = /((([A-Za-z]{3,9}:(?:\/\/)?)(?:[\-;:&=\+\$,\w]+@)?[A-Za-z0-9\.\-]+|(?:www\.|[\-;:&=\+\$,\w]+@)[A-Za-z0-9\.\-]+)((?:\/[\+~%\/\.\w\-_]*)?\??(?:[\-\+=&;%@\.\w_]*)#?(?:[\.\!\/\\\w]*))?)/
+        var list_new_text = dom_textarea_new.value.split("\n"); //以换行符为分隔符获取文本数组
+        for (var i = 0; i < list_new_text.length; i++) {
+            //console.log(list_new_text[i])
+            //console.log(reg.test(ip)) //匹配成功返回true
+            var list_text = list_new_text[i].match(reg)
+            if (list_text != null) {
+                console.log(list_text)
+                var domain = list_text[0]//xxx.com.cn
+                var root_domain
+                var sanji
+                var siji
+                if (domain.indexOf('com.cn') !== -1) {//若以这些字符串结尾 为"多级"根域名
+                    sanji = domain.replace(".com.cn", "")// aaa.xxx
+                    siji = sanji.substring(sanji.lastIndexOf(".") + 1)//xxx
+                    root_domain = siji + ".com.cn"//xxx.com.cn
+                    list_result.push(root_domain)
+                } else if (domain.indexOf('edu.cn') !== -1) {//若以这些字符串结尾 为"多级"根域名
+                    sanji = domain.replace(".edu.cn", "")// aaa.xxx
+                    siji = sanji.substring(sanji.lastIndexOf(".") + 1)//xxx
+                    root_domain = siji + ".edu.cn"//xxx.com.cn
+                    list_result.push(root_domain)
+                } else {
+                    var com = domain.substring(domain.lastIndexOf(".") + 1)//com
+                    console.log(com)
+                    var front_com = domain.replace("." + com, "")//aaa.xxx
+                    domain = front_com.substring(front_com.lastIndexOf(".") + 1)//xxx
+                    root_domain = domain + "." + com//xxx.com
+                    console.log(root_domain)
+                    list_result.push(root_domain)
+                }
+            } else {
+                console.log("第" + (i + 1) + "行未提取到IP")
+            }
+        }
+        list_result = unique(list_result) //去空行(忽略)-->去重-->排序
+        dom_textarea_result.value = "---提取URL数量<" + list_result.length + ">---\n" + list_result.join("\n")
+    }
+
     /*
     将提供的IP地址转换为对应的C段输出
     */
@@ -218,14 +261,15 @@
                 dic[cduan_result_list[key]] = 1
             }
         }
-        var dic2 = Object.keys(dic).sort(function (a, b) { return dic[b] - dic[a]; });
+        var dic2 = Object.keys(dic).sort(function (a, b) {
+            return dic[b] - dic[a];
+        });
         dom_textarea_result.value += "\n\n\n---提取C段数量<" + dic2.length + ">---\n"
         for (const key in dic2) {
             console.log("key: " + dic2[key] + " ,value: " + dic[dic2[key]]);
             dom_textarea_result.value += dic2[key] + "(" + dic[dic2[key]] + ")\n"
         }
     }
-
 
 
     /*
@@ -273,9 +317,13 @@
         //https://www.cnblogs.com/web-shu/p/13551942.html
 
         //差集:数组arr1相对于arr2所没有的
-        let diff = list_new_text.filter(function (val) { return list_history_text.indexOf(val) === -1 })
+        let diff = list_new_text.filter(function (val) {
+            return list_history_text.indexOf(val) === -1
+        })
         //交集
-        let intersection = list_history_text.filter(function (val) { return list_new_text.indexOf(val) > -1 })
+        let intersection = list_history_text.filter(function (val) {
+            return list_new_text.indexOf(val) > -1
+        })
 
         dom_textarea_history.value = list_history_text.join("\n")
         dom_textarea_new.value = list_new_text.join("\n")
@@ -303,7 +351,9 @@
 
         }
         // return result;
-        return result.sort(function (a, b) { return a.localeCompare(b) }); //排序后在输出
+        return result.sort(function (a, b) {
+            return a.localeCompare(b)
+        }); //排序后在输出
     }
 
 
